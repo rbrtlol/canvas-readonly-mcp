@@ -1,0 +1,20 @@
+# Caddy gets and renews the TLS certificate automatically.
+# Run with: caddy run --config Caddyfile   (or add this block to your existing Caddyfile)
+canvas-mcp.example.com {
+	# The secret is part of the URL path; don't log requests.
+	log {
+		output discard
+	}
+
+	handle /mcp* {
+		reverse_proxy 127.0.0.1:8787 {
+			flush_interval -1
+		}
+	}
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8787
+	}
+	handle {
+		respond 404
+	}
+}

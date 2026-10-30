@@ -1,0 +1,21 @@
+services:
+  canvas-mcp:
+    # Use the published image, or build from this checkout with `build: .`
+    image: ghcr.io/rbrtlol/canvas-readonly-mcp:2
+    # build: .
+    container_name: canvas-mcp
+    restart: unless-stopped
+    env_file: .env
+    # Bound to localhost only; a reverse proxy (Caddy, nginx) terminates TLS in front of it.
+    ports:
+      - "127.0.0.1:8787:8787"
+    read_only: true
+    volumes:
+      - file-cache:/cache
+      - snapshot-data:/data
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  file-cache:
+  snapshot-data:

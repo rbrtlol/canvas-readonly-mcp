@@ -1,0 +1,8 @@
+node_modules
+dist
+build-test
+test
+.github
+.env
+.git
+*.db*
