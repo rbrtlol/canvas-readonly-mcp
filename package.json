@@ -45,7 +45,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
-    "diff": "8.0.4",
+    "diff": "9.0.0",
     "express": "5.3.0",
     "fflate": "0.8.3",
     "unpdf": "1.8.1",
