@@ -1,4 +1,4 @@
-# Publishes to npm and GHCR when a version tag (v2.0.0, …) is pushed.
+# Publishes to npm and GHCR, then creates the GitHub Release, when a version tag (v2.0.0, …) is pushed.
 # Needs the repository secret NPM_TOKEN (an npm automation token).
 name: Release
 
@@ -52,3 +52,30 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # The GitHub Release page, with the matching CHANGELOG.md section as notes.
+  # Runs only once both packages are out.
+  github-release:
+    needs: [npm, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## / { if (found) exit; found = ($2 == v); next } found' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section"
+            exit 1
+          fi
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it as is."
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
