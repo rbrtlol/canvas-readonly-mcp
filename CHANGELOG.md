@@ -12,6 +12,7 @@
 ### Changed
 
 - Database schema version 3 (search index). Older servers refuse the upgraded database.
+- Dependency updates: `diff` 9.0.0, `unpdf` 1.9.0, `fflate` 0.8.3.
 
 ## 2.0.0 (2026-10-30)
 
