@@ -114,6 +114,14 @@ export interface Entity {
   title: string;
   url?: string | null;
   data: EntityData;
+  /** Files: extracted text per page/slide/section, for the search index (not stored in data). */
+  searchUnits?: string[];
+}
+
+/** The text an item is searchable by, besides its title. */
+export function searchBody(kind: string, data: EntityData): string {
+  if (kind === "module") return ((data.fields.items as string[] | null) ?? []).join("\n");
+  return data.text ?? "";
 }
 
 export interface KindResult {
@@ -418,14 +426,31 @@ async function collectFiles(
     let page_hashes: string[] | null = null;
     let extract_note: string | null = null;
     let extract_retry = false;
-    if (old && old.data.extra?.updated_at === m.updated_at && !old.data.extra?.extract_retry) {
+    let searchUnits: string[] | undefined;
+    const unchanged = old && old.data.extra?.updated_at === m.updated_at && !old.data.extra?.extract_retry;
+    // Text extracted before the search index existed: read it once more (usually from the file cache) to index it.
+    const unindexed =
+      unchanged &&
+      !String(old.data.fields.content_hash ?? "updated:").startsWith("updated:") &&
+      !store.isIndexed(course.id, "file", f.file_id, true);
+    if (unchanged) {
       content_hash = (old.data.fields.content_hash as string | null) ?? null;
       page_hashes = (old.data.extra?.page_hashes as string[] | null) ?? null;
       extract_note = (old.data.extra?.extract_note as string | null) ?? null;
-    } else if (extractPolicy === "all" || (extractPolicy === "linked" && f.linked)) {
+    }
+    if (unindexed) {
+      // Content is known to be unchanged; on failure keep the old values and try again next run.
+      try {
+        const { entry } = await files.readWithMeta(f.file_id, m);
+        searchUnits = entry.extracted.units.map((u) => u.text);
+      } catch {
+        // retried next run
+      }
+    } else if (!unchanged && (extractPolicy === "all" || (extractPolicy === "linked" && f.linked))) {
       try {
         const { entry } = await files.readWithMeta(f.file_id, m);
         const units = entry.extracted.units.map((u) => u.text);
+        searchUnits = units;
         content_hash = sha(units.join("\f")).slice(0, 32);
         page_hashes = units.map((t) => sha(t).slice(0, 12));
       } catch (e) {
@@ -462,6 +487,7 @@ async function collectFiles(
           ...(extract_retry ? { extract_retry } : {}),
         }),
       },
+      ...(searchUnits ? { searchUnits } : {}),
     };
   });
   return {
@@ -562,6 +588,19 @@ function changeDetails(kind: Kind, old: EntityRow | undefined, cur: Entity): Rec
   return d;
 }
 
+/** Keep the search index in step with a stored item; skips items whose text and title didn't change. */
+function indexForSearch(store: Store, courseId: string, kind: Kind, e: Entity, old: EntityRow | undefined, hash: string) {
+  if (kind === "file") {
+    // File text only arrives when it was (re-)extracted; otherwise keep the indexed pages.
+    if (e.searchUnits) store.indexEntity(courseId, kind, e.id, e.title, e.searchUnits);
+    else if (!store.isIndexed(courseId, kind, e.id)) store.indexEntity(courseId, kind, e.id, e.title, "");
+    else if (old?.title !== e.title) store.retitleIndexed(courseId, kind, e.id, e.title);
+    return;
+  }
+  const same = old && !old.removed_at && old.hash === hash && old.title === e.title;
+  if (!same || !store.isIndexed(courseId, kind, e.id)) store.indexEntity(courseId, kind, e.id, e.title, searchBody(kind, e.data));
+}
+
 /** Write one course's collected state and return the number of events produced. */
 export function applySnapshot(store: Store, courseId: string, runId: number, now: string, results: Map<Kind, KindResult>) {
   let events = 0;
@@ -596,6 +635,7 @@ export function applySnapshot(store: Store, courseId: string, runId: number, now
           last_seen: now,
           removed_at: null,
         });
+        indexForSearch(store, courseId, kind, e, old, hash);
         if (baseline) continue;
         if (!old) {
           if (!quiet?.has(e.id)) emit("added", e, changeDetails(kind, undefined, e));
@@ -614,6 +654,7 @@ export function applySnapshot(store: Store, courseId: string, runId: number, now
         for (const old of prev.values()) {
           if (old.removed_at || seen.has(old.entity_id) || res.keep?.has(old.entity_id)) continue;
           store.markRemoved(courseId, kind, old.entity_id, now);
+          store.unindexEntity(courseId, kind, old.entity_id);
           if (!baseline) emit("removed", { id: old.entity_id, title: old.title, url: old.url }, { fields: old.data.fields });
         }
       }

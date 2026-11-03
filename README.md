@@ -14,20 +14,25 @@ A **read-only** [MCP](https://modelcontextprotocol.io) server for **Canvas LMS**
 - "What's due in the next two weeks, and what have I not submitted?"
 - "Summarize the lab 2 instructions" (the server finds the PDF linked from the course and returns its text)
 - "Which slides in lecture 5 changed since last week?"
+- "Where did we cover dynamic programming?" (searches pages, announcements and the text of every linked PDF and slide deck)
+- "How will lab 3 be graded, and what did I lose points on in lab 2?"
 
 ## Tools
 
 | Tool | What it's for |
 |---|---|
 | `canvas_changes_since` | What changed since a time (default 26h): new/changed pages, assignments (due dates, grades), announcements, discussions, quizzes, events, files (which PDF pages changed). The daily-check tool. |
+| `canvas_search` | Full-text search across your courses: pages, assignments, announcements, discussions, the syllabus, and the text of linked PDFs, slides and documents (with the page/slide number). From stored snapshots, so it's instant. |
 | `canvas_course_snapshot` | Stored state of a course (optionally only some kinds, e.g. assignments). No Canvas calls. |
 | `canvas_snapshot_status` | Snapshot health: courses and your role, last run, counts, errors, next run. |
 | `canvas_run_snapshot` | Take a snapshot now and return what changed. |
 | `canvas_list_courses` | Your courses, ids and your role in each. |
 | `canvas_whats_new` | Canvas activity stream since a time. |
 | `canvas_list_planner_items` | Everything dated in a window, with submission status. |
-| `canvas_list_assignments` / `canvas_get_assignment` | Assignments, due dates, descriptions; "needs grading" counts for TAs/teachers. |
+| `canvas_list_assignments` / `canvas_get_assignment` | Assignments, due dates, descriptions, rubrics; as a student also your submission, teacher comments and rubric scores. "Needs grading" counts for TAs/teachers. |
+| `canvas_list_quizzes` / `canvas_get_quiz` | Classic quizzes and New Quizzes: time limit, attempts, lock window, instructions, your latest attempt. |
 | `canvas_list_announcements` | Announcements across courses. |
+| `canvas_list_discussions` / `canvas_get_discussion` | Discussion topics, and a whole thread with replies (without marking anything read). |
 | `canvas_get_syllabus` | The syllabus page. |
 | `canvas_list_modules` | Module structure with items. |
 | `canvas_list_pages` / `canvas_get_page` | Course pages as text, with their file links. |

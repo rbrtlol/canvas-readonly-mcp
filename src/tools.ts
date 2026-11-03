@@ -57,6 +57,88 @@ const mapAssignment = (a: any) => ({
   url: a.html_url,
 });
 
+const mapComment = (c: any) => `${c.author_name}${c.created_at ? ` (${c.created_at})` : ""}: ${c.comment}`;
+
+export const mapSubmission = (s: any) => ({
+  state: s.workflow_state,
+  attempt: s.attempt ?? undefined,
+  submitted_at: s.submitted_at ?? undefined,
+  graded_at: s.graded_at ?? undefined,
+  score: s.score ?? undefined,
+  grade: s.grade ?? undefined,
+  late: s.late || undefined,
+  missing: s.missing || undefined,
+  excused: s.excused || undefined,
+  comments: (s.submission_comments ?? []).map(mapComment),
+});
+
+/** Rubric criteria with their rating levels, plus how you were assessed on each when available. */
+export function mapRubric(rubric: any[], assessment?: Record<string, any> | null) {
+  return rubric.map((c: any) => {
+    const a = assessment?.[c.id];
+    const rating = a?.rating_id ? (c.ratings ?? []).find((r: any) => r.id === a.rating_id) : undefined;
+    return {
+      criterion: c.description,
+      ...(c.long_description ? { details: htmlToText(c.long_description, 2000) } : {}),
+      points: c.points,
+      ratings: (c.ratings ?? []).map((r: any) => `${r.points}: ${r.description}${r.long_description ? ` — ${htmlToText(r.long_description, 500)}` : ""}`),
+      ...(a
+        ? {
+            your_points: a.points ?? null,
+            ...(rating ? { your_rating: rating.description } : {}),
+            ...(a.comments ? { comments: a.comments } : {}),
+          }
+        : {}),
+    };
+  });
+}
+
+/** Entries of a discussion's /view as a reply tree, with author names and new entries merged in. */
+export function discussionThread(view: any, maxChars = 4000) {
+  const names = new Map<string, string>((view.participants ?? []).map((p: any) => [String(p.id), p.display_name]));
+  const byId = new Map<string, any>();
+  const roots: any[] = [];
+  const entry = (e: any) => ({
+    id: e.id,
+    author: e.user_id != null ? (names.get(String(e.user_id)) ?? `user ${e.user_id}`) : null,
+    created_at: e.created_at,
+    ...(e.updated_at && e.updated_at !== e.created_at ? { edited_at: e.updated_at } : {}),
+    message: e.deleted ? "(deleted)" : htmlToText(e.message, maxChars),
+    ...(e.rating_sum ? { likes: e.rating_sum } : {}),
+    replies: [] as any[],
+  });
+  const add = (e: any, parent: any) => {
+    if (byId.has(String(e.id))) return;
+    const x = entry(e);
+    byId.set(String(e.id), x);
+    (parent ? parent.replies : roots).push(x);
+    for (const r of e.replies ?? []) add(r, x);
+  };
+  for (const e of view.view ?? []) add(e, null);
+  // Entries newer than Canvas's cached view arrive flat, with parent_id.
+  const fresh = [...(view.new_entries ?? [])].sort((x: any, y: any) => String(x.created_at).localeCompare(String(y.created_at)));
+  for (const e of fresh) add(e, e.parent_id != null ? byId.get(String(e.parent_id)) : null);
+  for (const x of byId.values()) if (!x.replies.length) delete x.replies;
+  return { count: byId.size, entries: roots };
+}
+
+export const mapQuiz = (q: any) => ({
+  id: q.id,
+  title: q.title,
+  type: q.quiz_type,
+  due_at: q.due_at,
+  unlock_at: q.unlock_at,
+  lock_at: q.lock_at,
+  points: q.points_possible,
+  questions: q.question_count,
+  time_limit_min: q.time_limit ?? undefined,
+  allowed_attempts: q.allowed_attempts === -1 ? "unlimited" : q.allowed_attempts,
+  ...(q.locked_for_user ? { locked: true, lock_explanation: htmlToText(q.lock_explanation, 300) || undefined } : {}),
+  ...(q.published === false ? { published: false } : {}),
+  assignment_id: q.assignment_id ?? undefined,
+  url: q.html_url,
+});
+
 /** Body text plus structured file links; file links appear in the text as "(file:<id>)". */
 async function readableHtml(canvas: CanvasClient, courseId: string, html: string | null | undefined, maxLen?: number) {
   const ctx: LinkContext = { base: canvas.baseUrl, courseId, aliases: canvas.canvasOrigins.filter((o) => o !== canvas.baseUrl) };
@@ -193,16 +275,27 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
     "canvas_get_assignment",
     {
       title: "Get assignment",
-      description: "Full details of one assignment, including the description as text.",
+      description:
+        "Full details of one assignment: the description as text, the rubric (criteria, rating levels, points) if it has one, " +
+        "and, as a student, your submission with score, teacher comments and your rubric assessment per criterion.",
       inputSchema: { course_id: z.string(), assignment_id: z.string() },
       annotations: RO,
     },
     wrap(async ({ course_id, assignment_id }: { course_id: string; assignment_id: string }) => {
-      const a = await canvas.get(`/api/v1/courses/${course_id}/assignments/${assignment_id}`, {
-        "include[]": ["submission"],
-      });
+      const path = `/api/v1/courses/${course_id}/assignments/${assignment_id}`;
+      const a = await canvas.get(path, { "include[]": ["submission"] });
       const { body, ...links } = await readableHtml(canvas, course_id, a.description);
-      return { ...mapAssignment(a), description: body, ...links };
+      // Only students get a submission back; the rubric assessment and comments need their own request.
+      const sub = a.submission
+        ? await canvas.get(`${path}/submissions/self`, { "include[]": ["submission_comments", "rubric_assessment"] }).catch(() => a.submission)
+        : null;
+      return {
+        ...mapAssignment(a),
+        description: body,
+        ...links,
+        ...(a.rubric?.length ? { rubric: mapRubric(a.rubric, sub?.rubric_assessment) } : {}),
+        ...(sub ? { submission: mapSubmission(sub) } : {}),
+      };
     }),
   );
 
@@ -238,6 +331,143 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
         url: d.html_url,
         message: htmlToText(d.message, 4000),
       }));
+    }),
+  );
+
+  server.registerTool(
+    "canvas_list_discussions",
+    {
+      title: "List discussions",
+      description: "Discussion topics in a course, most recently active first, with reply and unread counts. Pass an id to canvas_get_discussion.",
+      inputSchema: { course_id: z.string() },
+      annotations: RO,
+    },
+    wrap(async ({ course_id }: { course_id: string }) => {
+      const list = await canvas.getAll(`/api/v1/courses/${course_id}/discussion_topics`, { order_by: "recent_activity" }, 300);
+      return list.map((d: any) => ({
+        id: d.id,
+        title: d.title,
+        author: d.author?.display_name ?? d.user_name ?? undefined,
+        posted_at: d.posted_at,
+        last_reply_at: d.last_reply_at ?? undefined,
+        replies: d.discussion_subentry_count,
+        unread: d.unread_count || undefined,
+        due_at: d.assignment?.due_at ?? undefined,
+        ...(d.pinned ? { pinned: true } : {}),
+        ...(d.locked ? { locked: true } : {}),
+        url: d.html_url,
+      }));
+    }),
+  );
+
+  server.registerTool(
+    "canvas_get_discussion",
+    {
+      title: "Get discussion",
+      description:
+        "Read a discussion topic (or announcement) with all replies as a thread: author, time and text of each entry. " +
+        "Doesn't mark anything as read. Ids come from canvas_list_discussions or canvas_list_announcements.",
+      inputSchema: {
+        course_id: z.string(),
+        topic_id: z.string(),
+        entry_chars: z.number().int().min(200).max(20_000).optional().describe("Max chars per reply, default 4000"),
+      },
+      annotations: RO,
+    },
+    wrap(async ({ course_id, topic_id, entry_chars }: { course_id: string; topic_id: string; entry_chars?: number }) => {
+      const path = `/api/v1/courses/${course_id}/discussion_topics/${topic_id}`;
+      const t = await canvas.get(path);
+      const topic = {
+        id: t.id,
+        title: t.title,
+        author: t.author?.display_name ?? t.user_name ?? undefined,
+        posted_at: t.posted_at,
+        ...(t.assignment ? { due_at: t.assignment.due_at, points: t.assignment.points_possible, assignment_id: t.assignment.id } : {}),
+        ...(t.locked ? { locked: true } : {}),
+        url: t.html_url,
+        ...(await readableHtml(canvas, course_id, t.message)),
+      };
+      try {
+        const view = await canvas.get(`${path}/view`, { include_new_entries: 1 });
+        return { ...topic, ...discussionThread(view, entry_chars ?? 4000) };
+      } catch (e) {
+        if (e instanceof CanvasError && e.status === 403 && /require_initial_post/i.test(e.message)) {
+          return { ...topic, note: "This discussion only shows replies after you have posted in it yourself." };
+        }
+        throw e;
+      }
+    }),
+  );
+
+  server.registerTool(
+    "canvas_list_quizzes",
+    {
+      title: "List quizzes",
+      description:
+        "Quizzes in a course: classic quizzes with time limit, attempts, question count and lock window, plus New Quizzes " +
+        "(which Canvas exposes as assignments, with due dates and your submission status).",
+      inputSchema: { course_id: z.string() },
+      annotations: RO,
+    },
+    wrap(async ({ course_id }: { course_id: string }) => {
+      const api = `/api/v1/courses/${course_id}`;
+      const [classic, assignments] = await Promise.all([
+        canvas.getAll(`${api}/quizzes`, {}, 300).catch((e: Error) => e),
+        canvas.getAll(`${api}/assignments`, { "include[]": ["submission"], order_by: "due_at" }).catch((e: Error) => e),
+      ]);
+      if (classic instanceof Error && assignments instanceof Error) throw classic;
+      const disabled = classic instanceof CanvasError && (classic.status === 403 || classic.status === 404);
+      if (classic instanceof Error && !disabled) throw classic;
+      return {
+        quizzes: classic instanceof Error ? [] : classic.map(mapQuiz),
+        new_quizzes: assignments instanceof Error ? [] : assignments.filter((a: any) => a.is_quiz_lti_assignment).map(mapAssignment),
+        ...(disabled ? { note: "The classic quizzes list isn't available in this course (disabled or hidden for your role)." } : {}),
+      };
+    }),
+  );
+
+  server.registerTool(
+    "canvas_get_quiz",
+    {
+      title: "Get quiz",
+      description:
+        "One classic quiz: instructions as text, time limit, attempts, lock window, settings, and your latest attempt " +
+        "(score, kept score, attempts left). For New Quizzes use canvas_get_assignment with the assignment id.",
+      inputSchema: { course_id: z.string(), quiz_id: z.string() },
+      annotations: RO,
+    },
+    wrap(async ({ course_id, quiz_id }: { course_id: string; quiz_id: string }) => {
+      const path = `/api/v1/courses/${course_id}/quizzes/${quiz_id}`;
+      const q = await canvas.get(path);
+      const { body, ...links } = await readableHtml(canvas, course_id, q.description);
+      const sub = await canvas
+        .get(`${path}/submission`)
+        .then((r: any) => r?.quiz_submissions?.[0] ?? null)
+        .catch(() => null);
+      return {
+        ...mapQuiz(q),
+        one_question_at_a_time: q.one_question_at_a_time || undefined,
+        cant_go_back: q.cant_go_back || undefined,
+        shuffle_answers: q.shuffle_answers || undefined,
+        show_correct_answers: q.show_correct_answers,
+        ...(q.has_access_code ? { access_code_required: true } : {}),
+        description: body,
+        ...links,
+        ...(sub
+          ? {
+              your_submission: {
+                state: sub.workflow_state,
+                attempt: sub.attempt,
+                score: sub.score ?? undefined,
+                kept_score: sub.kept_score ?? undefined,
+                started_at: sub.started_at ?? undefined,
+                finished_at: sub.finished_at ?? undefined,
+                time_spent_s: sub.time_spent ?? undefined,
+                attempts_left: sub.attempts_left === -1 ? "unlimited" : sub.attempts_left,
+              },
+            }
+          : {}),
+      };
     }),
   );
 

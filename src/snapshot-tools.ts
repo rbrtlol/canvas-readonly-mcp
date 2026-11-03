@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { KINDS, SnapshotService } from "./snapshot.js";
-import { EventRow } from "./store.js";
+import { EventRow, ftsQuery } from "./store.js";
 import { DISPLAY_TZ, fmtLocal, localizeTimes } from "./time.js";
 import { RO, wrap } from "./tools.js";
 
@@ -20,6 +20,24 @@ function compactEvent(e: EventRow) {
     ...(e.url ? { url: e.url } : {}),
     ...e.details,
   };
+}
+
+/** At most MAX_HITS_PER_ITEM pages of one file, so one long PDF doesn't crowd out everything else. */
+const MAX_HITS_PER_ITEM = 3;
+
+function runSearch(snaps: SnapshotService, query: string, any: boolean, a: { course_id?: string; kinds?: string[] }, limit: number) {
+  const match = ftsQuery(query, any);
+  if (!match) throw new Error("The query has no searchable words");
+  const perItem = new Map<string, number>();
+  return snaps.store
+    .search(match, { courseId: a.course_id, kinds: a.kinds, limit: limit * MAX_HITS_PER_ITEM })
+    .filter((h) => {
+      const key = `${h.course_id}/${h.kind}/${h.entity_id}`;
+      const n = (perItem.get(key) ?? 0) + 1;
+      perItem.set(key, n);
+      return n <= MAX_HITS_PER_ITEM;
+    })
+    .slice(0, limit);
 }
 
 export function registerSnapshotTools(server: McpServer, snaps: SnapshotService) {
@@ -82,6 +100,49 @@ export function registerSnapshotTools(server: McpServer, snaps: SnapshotService)
           : {}),
         courses,
       });
+    }),
+  );
+
+  server.registerTool(
+    "canvas_search",
+    {
+      title: "Search course content",
+      description:
+        "Full-text search across your snapshot courses (no Canvas calls): pages, assignments, announcements, discussions, quizzes, " +
+        "events, modules, the syllabus, file names, and the text of linked files (PDF pages, slides, document sections). " +
+        "Words match as prefixes and all must appear (\"dyn prog\" finds \"dynamic programming\"); put a \"phrase in quotes\". " +
+        "If nothing matches every word, results matching any word are returned. File hits give the page/slide to pass to canvas_read_file.",
+      inputSchema: {
+        query: z.string().min(1),
+        course_id: z.string().optional(),
+        kinds: kindsSchema.describe(`Limit to some of: ${KINDS.join(", ")}`),
+        limit: z.number().int().min(1).max(50).optional().describe("Default 15"),
+      },
+      annotations: { ...RO, openWorldHint: false },
+    },
+    wrap(async (a: { query: string; course_id?: string; kinds?: string[]; limit?: number }) => {
+      snaps.ensureFresh();
+      const limit = a.limit ?? 15;
+      let match = "all words";
+      let hits = runSearch(snaps, a.query, false, a, limit);
+      if (!hits.length) {
+        match = "any word";
+        hits = runSearch(snaps, a.query, true, a, limit);
+      }
+      return {
+        query: a.query,
+        ...(hits.length ? { matched: match } : { note: "No matches. Search covers the snapshot courses only; try other words or check canvas_snapshot_status." }),
+        results: hits.map((h) => ({
+          course: label(h.course_id),
+          course_id: h.course_id,
+          kind: h.kind,
+          title: h.title,
+          id: h.entity_id,
+          ...(h.unit != null ? { page: h.unit, read: `canvas_read_file course_id=${h.course_id} file_id=${h.entity_id} pages="${h.unit}"` } : {}),
+          snippet: h.snippet.replace(/\s+/g, " ").trim(),
+          ...(h.url ? { url: h.url } : {}),
+        })),
+      };
     }),
   );
 

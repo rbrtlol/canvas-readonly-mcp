@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.1.0 (2026-11-03)
+
+### Added
+
+- `canvas_search`: full-text search (SQLite FTS5) over everything the snapshots store, including the text of linked files per page/slide. Prefix matching, phrases, diacritics-insensitive. The first snapshot after upgrading indexes file text that was extracted earlier (mostly from the file cache).
+- `canvas_list_discussions` / `canvas_get_discussion`: discussion threads with replies, via the `/view` endpoint (doesn't mark entries as read).
+- `canvas_list_quizzes` / `canvas_get_quiz`: classic quizzes (settings, instructions, your latest attempt) and New Quizzes.
+- `canvas_get_assignment` returns the rubric, and for students the submission with comments and the rubric assessment per criterion.
+
+### Changed
+
+- Database schema version 3 (search index). Older servers refuse the upgraded database.
+
 ## 2.0.0 (2026-10-30)
 
 First public release, generalized from a personal KTH setup.

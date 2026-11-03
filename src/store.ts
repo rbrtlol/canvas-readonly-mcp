@@ -122,7 +122,52 @@ CREATE TABLE courses (
   updated_at TEXT NOT NULL
 );
 `,
+  `
+-- Full-text search over snapshot text. search_docs says what each FTS row belongs to (rowid = id):
+-- one row per item, or one per page/slide/section for files with extracted text (unit = 1-based).
+CREATE TABLE search_docs (
+  id INTEGER PRIMARY KEY,
+  course_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  unit INTEGER
+);
+CREATE INDEX search_docs_by_entity ON search_docs (course_id, kind, entity_id);
+CREATE VIRTUAL TABLE search USING fts5(title, body, tokenize = 'unicode61 remove_diacritics 2');
+-- Index what is already stored; file text is added by the next snapshot (mostly from the file cache).
+INSERT INTO search_docs (course_id, kind, entity_id) SELECT course_id, kind, entity_id FROM entities WHERE removed_at IS NULL;
+INSERT INTO search (rowid, title, body)
+SELECT d.id, e.title,
+  CASE WHEN e.kind = 'module' THEN COALESCE((SELECT group_concat(value, char(10)) FROM json_each(e.data, '$.fields.items')), '')
+       ELSE COALESCE(json_extract(e.data, '$.text'), '') END
+FROM search_docs d JOIN entities e USING (course_id, kind, entity_id);
+`,
 ];
+
+export interface SearchHit {
+  course_id: string;
+  kind: string;
+  entity_id: string;
+  unit: number | null;
+  title: string;
+  url: string | null;
+  snippet: string;
+}
+
+/**
+ * Plain words become prefix terms that must all match ("dyn prog" finds "dynamic programming");
+ * "quoted text" is a phrase. With any = true, terms are OR'ed instead. Null if nothing searchable.
+ */
+export function ftsQuery(q: string, any = false): string | null {
+  const terms: string[] = [];
+  for (const m of q.matchAll(/"([^"]*)"|([^\s"]+)/g)) {
+    const words = (m[1] ?? m[2]).match(/[\p{L}\p{N}_]+/gu) ?? [];
+    if (!words.length) continue;
+    if (m[1] !== undefined) terms.push(`"${words.join(" ")}"`);
+    else terms.push(...words.map((w) => `"${w}"*`));
+  }
+  return terms.length ? terms.join(any ? " OR " : " ") : null;
+}
 
 const parseEntity = (r: any): EntityRow => ({ ...r, data: JSON.parse(r.data) });
 const parseEvent = (r: any): EventRow => ({ ...r, details: JSON.parse(r.details) });
@@ -247,6 +292,60 @@ export class Store {
       .prepare(`SELECT * FROM events WHERE run_id IN (${runIds.map(() => "?").join(",")}) ORDER BY id DESC`)
       .all(...runIds)
       .map(parseEvent);
+  }
+
+  private searchDocIds(courseId: string, kind: string, entityId: string, unitsOnly = false): number[] {
+    const sql = `SELECT id FROM search_docs WHERE course_id = ? AND kind = ? AND entity_id = ?${unitsOnly ? " AND unit IS NOT NULL" : ""}`;
+    return this.db.prepare(sql).all(courseId, kind, entityId).map((r: any) => Number(r.id));
+  }
+
+  /** Replace an item's search rows: one for a string body, one per unit for an array (files). */
+  indexEntity(courseId: string, kind: string, entityId: string, title: string, body: string | string[]) {
+    this.unindexEntity(courseId, kind, entityId);
+    const doc = this.db.prepare("INSERT INTO search_docs (course_id, kind, entity_id, unit) VALUES (?, ?, ?, ?)");
+    const fts = this.db.prepare("INSERT INTO search (rowid, title, body) VALUES (?, ?, ?)");
+    const rows: [number | null, string][] = typeof body === "string" ? [[null, body]] : body.length ? body.map((t, i) => [i + 1, t]) : [[null, ""]];
+    for (const [unit, text] of rows) fts.run(Number(doc.run(courseId, kind, entityId, unit).lastInsertRowid), title, text);
+  }
+
+  unindexEntity(courseId: string, kind: string, entityId: string) {
+    const ids = this.searchDocIds(courseId, kind, entityId);
+    if (!ids.length) return;
+    const list = ids.map(() => "?").join(",");
+    this.db.prepare(`DELETE FROM search WHERE rowid IN (${list})`).run(...ids);
+    this.db.prepare(`DELETE FROM search_docs WHERE id IN (${list})`).run(...ids);
+  }
+
+  isIndexed(courseId: string, kind: string, entityId: string, unitsOnly = false): boolean {
+    return this.searchDocIds(courseId, kind, entityId, unitsOnly).length > 0;
+  }
+
+  /** Change an item's title without touching its indexed text. */
+  retitleIndexed(courseId: string, kind: string, entityId: string, title: string) {
+    for (const id of this.searchDocIds(courseId, kind, entityId)) this.db.prepare("UPDATE search SET title = ? WHERE rowid = ?").run(title, id);
+  }
+
+  /** Best matches first (title matches weigh more). Throws on an invalid FTS query. */
+  search(match: string, opts: { courseId?: string; kinds?: string[]; limit: number }): SearchHit[] {
+    let sql = `
+      SELECT d.course_id, d.kind, d.entity_id, d.unit, s.title, e.url,
+        snippet(search, -1, '«', '»', '…', 20) AS snippet
+      FROM search s
+      JOIN search_docs d ON d.id = s.rowid
+      LEFT JOIN entities e ON e.course_id = d.course_id AND e.kind = d.kind AND e.entity_id = d.entity_id
+      WHERE search MATCH ?`;
+    const args: (string | number)[] = [match];
+    if (opts.courseId) {
+      sql += " AND d.course_id = ?";
+      args.push(opts.courseId);
+    }
+    if (opts.kinds?.length) {
+      sql += ` AND d.kind IN (${opts.kinds.map(() => "?").join(",")})`;
+      args.push(...opts.kinds);
+    }
+    sql += " ORDER BY bm25(search, 5.0, 1.0) LIMIT ?";
+    args.push(opts.limit);
+    return this.db.prepare(sql).all(...args) as any;
   }
 
   pruneEvents(olderThan: string): number {

@@ -10,7 +10,7 @@ import { CanvasClient } from "../src/canvas.js";
 import { FileReader } from "../src/extract.js";
 import { crawlCourse } from "../src/links.js";
 import { discoverCourses, parseCourseOverride, roleFromEnrollments, SnapshotService } from "../src/snapshot.js";
-import { Store } from "../src/store.js";
+import { ftsQuery, Store } from "../src/store.js";
 import { json, MockCanvas, startMockCanvas } from "./mock-canvas.js";
 
 const pdf = readFileSync(new URL("../../test/fixtures/sample.pdf", import.meta.url));
@@ -226,6 +226,21 @@ describe("SnapshotService end to end", () => {
     const file = events.find((e) => e.kind === "file" && e.entity_id === "500")!;
     assert.equal(file.details.pages_changed, "2");
     assert.ok(!events.some((e) => e.kind === "file" && e.entity_id === "501"), "only updated_at changed for 501, same content");
+
+    // Search finds item text and the changed PDF page; accents and case don't matter.
+    const pageHit = store.search(ftsQuery("lab due")!, { limit: 10 }).find((h) => h.kind === "page");
+    assert.equal(pageHit?.entity_id, "labs");
+    const fileHits = store.search(ftsQuery("homogeneous coordinatez")!, { limit: 10 });
+    assert.deepEqual(fileHits.map((h) => [h.kind, h.entity_id, h.unit]), [["file", "500", 2]]);
+    assert.match(fileHits[0].snippet, /«coordinatez»/);
+    assert.equal(store.search(ftsQuery("HOMOGÉNEOUS")!, { kinds: ["file"], limit: 10 }).length, 2, "both PDFs, diacritics folded");
+
+    // A database from before the search index: file text is indexed on the next run, without events.
+    store.unindexEntity("7", "file", "500");
+    store.indexEntity("7", "file", "500", "lecture.pdf", "");
+    const [backfill] = await snaps.run().promise;
+    assert.deepEqual(store.eventsForRuns([backfill]), []);
+    assert.ok(store.isIndexed("7", "file", "500", true));
   });
 });
 
@@ -233,15 +248,32 @@ describe("Store migrations", () => {
   it("upgrades a database created before schema versioning", () => {
     const dir = mkdtempSync(join(tmpdir(), "canvas-mcp-test-"));
     const path = join(dir, "old.db");
-    // What version 1.2.0 created: the tables, but user_version 0 and no courses table.
+    // What version 1.2.0 created: the tables, but user_version 0 and no courses or search tables.
     const legacy = new Store(path);
-    legacy.db.exec("DROP TABLE courses; PRAGMA user_version = 0;");
+    legacy.db.exec("DROP TABLE courses; DROP TABLE search; DROP TABLE search_docs; PRAGMA user_version = 0;");
     legacy.db.close();
 
     const s = new Store(path);
-    assert.equal(s.schemaVersion, 2);
+    assert.equal(s.schemaVersion, 3);
     s.setCourses([{ course_id: "1", label: "C", name: null, role: "student" }], "2026-11-01T00:00:00Z");
     assert.equal(s.courses().length, 1);
+  });
+
+  it("indexes already stored items for search when upgrading to schema 3", () => {
+    const dir = mkdtempSync(join(tmpdir(), "canvas-mcp-test-"));
+    const path = join(dir, "v2.db");
+    const v2 = new Store(path);
+    v2.db.exec("DROP TABLE search; DROP TABLE search_docs; PRAGMA user_version = 2;");
+    const base = { url: null, hash: "h", first_seen: "t", last_seen: "t", removed_at: null };
+    v2.upsertEntity({ ...base, course_id: "1", kind: "page", entity_id: "intro", title: "Intro", data: { fields: {}, text: "Eigenvalues and eigenvectors" } });
+    v2.upsertEntity({ ...base, course_id: "1", kind: "module", entity_id: "3", title: "Week 3", data: { fields: { items: ["Page: Fourier series"] } } });
+    v2.upsertEntity({ ...base, course_id: "1", kind: "page", entity_id: "gone", title: "Gone", data: { fields: {}, text: "eigen" }, removed_at: "t" });
+    v2.db.close();
+
+    const s = new Store(path);
+    assert.equal(s.schemaVersion, 3);
+    assert.deepEqual(s.search(ftsQuery("eigen")!, { limit: 10 }).map((h) => h.entity_id), ["intro"]);
+    assert.deepEqual(s.search(ftsQuery("fourier")!, { limit: 10 }).map((h) => h.entity_id), ["3"]);
   });
 
   it("refuses a database from a newer version", () => {
