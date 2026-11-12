@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Claude Desktop extension: each release has a `canvas-readonly-mcp-<version>.mcpb` that installs with one click and asks for the Canvas address and token (stored in the system keychain). No Node.js or config file needed. Build it locally with `npm run bundle`.
+
 ## 2.1.0 (2026-11-03)
 
 ### Added

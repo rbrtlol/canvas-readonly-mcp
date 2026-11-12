@@ -53,8 +53,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # The GitHub Release page, with the matching CHANGELOG.md section as notes.
-  # Runs only once both packages are out.
+  # The GitHub Release page, with the matching CHANGELOG.md section as notes and the
+  # Claude Desktop extension (.mcpb) attached. Runs only once both packages are out.
   github-release:
     needs: [npm, image]
     runs-on: ubuntu-latest
@@ -62,6 +62,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build the Claude Desktop extension
+        run: npm run bundle
       - name: Release notes from CHANGELOG.md
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -74,8 +81,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          bundle="canvas-readonly-mcp-${GITHUB_REF_NAME#v}.mcpb"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; leaving it as is."
+            echo "Release $GITHUB_REF_NAME already exists; only (re)attaching $bundle."
+            gh release upload "$GITHUB_REF_NAME" "$bundle" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md "$bundle"
           fi

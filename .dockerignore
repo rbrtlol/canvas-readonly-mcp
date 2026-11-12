@@ -6,3 +6,6 @@ test
 .env
 .git
 *.db*
+mcpb
+scripts
+*.mcpb

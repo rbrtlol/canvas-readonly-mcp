@@ -1,10 +1,13 @@
 # canvas-readonly-mcp
 
-A **read-only** [MCP](https://modelcontextprotocol.io) server for **Canvas LMS**. It lets Claude (or any MCP client) read your courses, deadlines, announcements, pages and the *contents* of course files (lecture slides, lab instructions), and keeps a daily change log, so "what's new in my courses?" is one cheap call.
+**Ask Claude what changed in your courses, and search every lecture slide.** A read-only [MCP](https://modelcontextprotocol.io) server for **Canvas LMS**, built as a study assistant rather than a full Canvas API.
 
-- **Read-only by design:** it only ever sends `GET` requests to Canvas. It can't submit, post, or change anything.
-- **Works for any Canvas instance and any role:** students, TAs, teachers.
-- **Your token stays local:** it runs on your machine (stdio) or your own server (HTTP). Nothing goes through a third party.
+- **Knows what changed:** daily snapshots of your courses, so "what's new since yesterday?" is one call: new announcements, moved deadlines, new grades, edited pages, even which slides in a lecture PDF changed.
+- **Searches inside your files:** full-text search over pages, assignments, announcements and the text of every linked PDF, slide deck and document, with the page or slide number. It finds files linked from pages and modules even when the Files tab is hidden.
+- **Read-only by design:** it only ever sends `GET` requests to Canvas. It can't submit, post, grade or change anything, and it doesn't even mark discussions as read.
+- **Your token stays with you:** one-click Claude Desktop extension (token in your system keychain), local stdio, or your own server for claude.ai. Nothing goes through a third party.
+
+Works with any Canvas instance. Made for students; TAs and teachers can use it too (for reading, e.g. "needs grading" counts).
 
 > Not affiliated with or endorsed by Instructure. "Canvas" is a trademark of Instructure, Inc.
 
@@ -51,7 +54,15 @@ In Canvas: **Account → Settings → + New access token**. Give it a purpose ("
 
 You also need your Canvas address, e.g. `https://canvas.yourschool.edu` or `https://yourschool.instructure.com`.
 
-### 2a. Local: Claude Desktop, Claude Code and other stdio clients (easiest)
+### 2a. Claude Desktop: one-click extension (easiest)
+
+1. Download `canvas-readonly-mcp-<version>.mcpb` from the [latest release](https://github.com/rbrtlol/canvas-readonly-mcp/releases/latest).
+2. Open it (double-click, or drag it into Claude Desktop → Settings → Extensions) and click **Install**.
+3. Enter your Canvas address and access token. The token is stored in your system keychain.
+
+Nothing else to install: Claude Desktop runs the extension with its built-in Node.js.
+
+### 2b. Local: Claude Code and other stdio clients
 
 Requires Node.js 22.13 or newer.
 
@@ -64,7 +75,7 @@ claude mcp add canvas \
   -- npx -y canvas-readonly-mcp
 ```
 
-**Claude Desktop:** add this to `claude_desktop_config.json` (Settings → Developer → Edit Config):
+**Claude Desktop without the extension:** add this to `claude_desktop_config.json` (Settings → Developer → Edit Config):
 
 ```json
 {
@@ -83,7 +94,7 @@ claude mcp add canvas \
 
 In stdio mode, snapshots refresh shortly after the client starts the server, and in the background whenever they're older than `SNAPSHOT_MAX_AGE_H` (default 20h). Data is stored in your user data directory (`~/Library/Application Support/canvas-readonly-mcp` on macOS, `~/.local/share/canvas-readonly-mcp` on Linux, `%APPDATA%\canvas-readonly-mcp` on Windows).
 
-### 2b. Server: claude.ai custom connectors (HTTP)
+### 2c. Server: claude.ai custom connectors (HTTP)
 
 claude.ai connects from the internet, so this needs a server with HTTPS.
 
@@ -163,7 +174,10 @@ npm run typecheck
 npm run build
 CANVAS_BASE_URL=… CANVAS_TOKEN=… node dist/cli.js          # stdio
 node dist/cli.js --http --env-file .env                     # HTTP
+npm run bundle       # build + pack the Claude Desktop extension (.mcpb)
 ```
+
+The extension manifest is [`mcpb/manifest.json`](mcpb/manifest.json); its version is taken from `package.json` when packing. Update its `tools` list when adding or renaming a tool.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 

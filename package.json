@@ -1,7 +1,7 @@
 {
   "name": "canvas-readonly-mcp",
   "version": "2.1.0",
-  "description": "Read-only MCP server for Canvas LMS: courses, deadlines, pages, file contents (PDF/PPTX/DOCX) and a daily change log, for Claude and other MCP clients",
+  "description": "Read-only Canvas LMS MCP server for students: what changed in your courses, full-text search over lecture slides and PDFs, deadlines and grades, for Claude and other MCP clients",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -41,6 +41,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "test": "rm -rf build-test && tsc -p tsconfig.test.json && node --disable-warning=ExperimentalWarning --test --test-reporter=spec 'build-test/test/**/*.test.js'",
     "start:http": "node dist/cli.js --http",
+    "bundle": "npm run build && scripts/build-mcpb.sh",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {

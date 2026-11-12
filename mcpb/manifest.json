@@ -1,0 +1,93 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/mcpb-manifest-v0.3.schema.json",
+  "manifest_version": "0.3",
+  "name": "canvas-readonly-mcp",
+  "display_name": "Canvas LMS (read-only)",
+  "version": "0.0.0",
+  "description": "Ask what changed in your Canvas courses and search every lecture slide and PDF. Read-only: it can't submit, post or change anything.",
+  "long_description": "A read-only server for Canvas LMS. It only ever sends GET requests to Canvas, so it can't submit, post or change anything. It works with any Canvas instance and any role (students, TAs, teachers).\n\nAsk things like \"What changed in my courses since yesterday?\", \"What's due in the next two weeks?\", \"Summarize the lab 2 instructions\" or \"Where did we cover dynamic programming?\". It reads the text of PDFs, slide decks and Word documents linked from your courses, and keeps daily snapshots so changes and full-text search are instant.\n\nYour token is stored in your system keychain and only sent to your Canvas. Not affiliated with or endorsed by Instructure. \"Canvas\" is a trademark of Instructure, Inc.",
+  "author": {
+    "name": "Robert Rosenquist",
+    "url": "https://github.com/rbrtlol"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rbrtlol/canvas-readonly-mcp"
+  },
+  "homepage": "https://github.com/rbrtlol/canvas-readonly-mcp#readme",
+  "documentation": "https://github.com/rbrtlol/canvas-readonly-mcp#readme",
+  "support": "https://github.com/rbrtlol/canvas-readonly-mcp/issues",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/cli.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/cli.js"],
+      "env": {
+        "CANVAS_BASE_URL": "${user_config.canvas_base_url}",
+        "CANVAS_TOKEN": "${user_config.canvas_token}",
+        "CANVAS_HOST_ALIASES": "${user_config.canvas_host_aliases}"
+      }
+    }
+  },
+  "user_config": {
+    "canvas_base_url": {
+      "type": "string",
+      "title": "Canvas address",
+      "description": "The address you open Canvas at, e.g. https://canvas.yourschool.edu or https://yourschool.instructure.com",
+      "required": true
+    },
+    "canvas_token": {
+      "type": "string",
+      "title": "Canvas access token",
+      "description": "Create one in Canvas under Account → Settings → + New access token. Stored in your system keychain.",
+      "sensitive": true,
+      "required": true
+    },
+    "canvas_host_aliases": {
+      "type": "string",
+      "title": "Other Canvas addresses (optional)",
+      "description": "Other hostnames of the same Canvas, comma-separated (e.g. yourschool.instructure.com when you use a custom domain). Leave empty if unsure.",
+      "required": false,
+      "default": ""
+    }
+  },
+  "tools": [
+    { "name": "canvas_changes_since", "description": "What changed since a time: pages, assignments, grades, announcements, discussions, quizzes, events, files." },
+    { "name": "canvas_search", "description": "Full-text search across courses, including the text of linked PDFs and slides." },
+    { "name": "canvas_course_snapshot", "description": "Stored state of a course, without calling Canvas." },
+    { "name": "canvas_snapshot_status", "description": "Snapshot health: courses, last run, counts, errors." },
+    { "name": "canvas_run_snapshot", "description": "Take a snapshot now and return what changed." },
+    { "name": "canvas_whoami", "description": "The Canvas user the token belongs to." },
+    { "name": "canvas_list_courses", "description": "Your courses, ids and your role in each." },
+    { "name": "canvas_whats_new", "description": "Canvas activity stream since a time." },
+    { "name": "canvas_list_planner_items", "description": "Everything dated in a window, with submission status." },
+    { "name": "canvas_list_assignments", "description": "Assignments and due dates." },
+    { "name": "canvas_get_assignment", "description": "One assignment with rubric, your submission and teacher comments." },
+    { "name": "canvas_list_quizzes", "description": "Classic quizzes and New Quizzes." },
+    { "name": "canvas_get_quiz", "description": "Quiz settings, instructions and your latest attempt." },
+    { "name": "canvas_list_announcements", "description": "Announcements across courses." },
+    { "name": "canvas_list_discussions", "description": "Discussion topics." },
+    { "name": "canvas_get_discussion", "description": "A whole discussion thread with replies, without marking it read." },
+    { "name": "canvas_get_syllabus", "description": "The syllabus page." },
+    { "name": "canvas_list_modules", "description": "Module structure with items." },
+    { "name": "canvas_list_pages", "description": "Course pages." },
+    { "name": "canvas_get_page", "description": "A course page as text, with its file links." },
+    { "name": "canvas_list_linked_files", "description": "Every file linked from a course, even when the files tab is hidden." },
+    { "name": "canvas_list_files", "description": "Course files." },
+    { "name": "canvas_read_file", "description": "Text of a PDF, PPTX, DOCX, text file or ZIP listing." },
+    { "name": "canvas_list_calendar_events", "description": "Calendar events." },
+    { "name": "canvas_get_grades", "description": "Your own scores, grades and comments." },
+    { "name": "canvas_api_get", "description": "Any read-only GET /api/v1/... endpoint." }
+  ],
+  "tools_generated": false,
+  "keywords": ["canvas", "canvas-lms", "lms", "education", "student", "courses", "read-only"],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=22.13.0"
+    }
+  }
+}
