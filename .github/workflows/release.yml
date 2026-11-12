@@ -54,12 +54,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   # The GitHub Release page, with the matching CHANGELOG.md section as notes and the
-  # Claude Desktop extension (.mcpb) attached. Runs only once both packages are out.
+  # Claude Desktop extension (.mcpb) attached, then the MCP Registry entry (server.json) listing
+  # both the npm package and that .mcpb. Runs only once both packages are out: the registry
+  # checks the published npm package's mcpName.
   github-release:
     needs: [npm, image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write # mcp-publisher login github-oidc
+    env:
+      MCP_PUBLISHER_VERSION: "1.8.6"
+      MCP_PUBLISHER_SHA256: 1fbe93fc0783c2394d8012c8d6e50a59e98cb2cc2d216264cc69f405d0e21340 # linux_amd64
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -88,3 +94,26 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md "$bundle"
           fi
+      - name: Add the Desktop extension to server.json
+        run: |
+          bundle="canvas-readonly-mcp-${GITHUB_REF_NAME#v}.mcpb"
+          node -e '
+            const fs = require("fs");
+            const [bundle, url] = process.argv.slice(1);
+            const sha = require("crypto").createHash("sha256").update(fs.readFileSync(bundle)).digest("hex");
+            const server = JSON.parse(fs.readFileSync("server.json", "utf8"));
+            if (server.version !== process.env.GITHUB_REF_NAME.slice(1)) throw new Error(`server.json version ${server.version} does not match the tag`);
+            server.packages.push({ registryType: "mcpb", identifier: url, fileSha256: sha, transport: { type: "stdio" } });
+            fs.writeFileSync("server.json", JSON.stringify(server, null, 2) + "\n");
+          ' "$bundle" "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${bundle}"
+          cat server.json
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Publish to the MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

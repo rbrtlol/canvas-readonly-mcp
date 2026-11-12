@@ -24,3 +24,29 @@ describe("mcpb manifest", () => {
     for (const key of Object.keys(manifest.server.mcp_config.env)) assert.match(config, new RegExp(`\\b${key}:`), key);
   });
 });
+
+// server.json is the MCP Registry entry. The registry checks that the published npm package's
+// mcpName matches its name, so name and versions must follow package.json.
+describe("MCP Registry server.json", () => {
+  const pkg = JSON.parse(read("package.json"));
+  const server = JSON.parse(read("server.json"));
+  const npm = server.packages.find((p: { registryType: string }) => p.registryType === "npm");
+
+  it("matches package.json", () => {
+    assert.equal(server.name, pkg.mcpName);
+    assert.equal(server.version, pkg.version, "bump server.json together with package.json");
+    assert.equal(npm.identifier, pkg.name);
+    assert.equal(npm.version, pkg.version, "bump server.json together with package.json");
+  });
+
+  it("stays within registry limits", () => {
+    assert.ok(server.description.length <= 100, `description is ${server.description.length} chars (max 100)`);
+    assert.match(server.name, /^io\.github\.rbrtlol\/[a-zA-Z0-9._-]+$/);
+  });
+
+  it("asks for the same settings as the Desktop extension", () => {
+    const manifest = JSON.parse(read("mcpb/manifest.json"));
+    const names = npm.environmentVariables.map((v: { name: string }) => v.name).sort();
+    assert.deepEqual(names, Object.keys(manifest.server.mcp_config.env).sort());
+  });
+});

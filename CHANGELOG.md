@@ -5,6 +5,7 @@
 ### Added
 
 - Claude Desktop extension: each release has a `canvas-readonly-mcp-<version>.mcpb` that installs with one click and asks for the Canvas address and token (stored in the system keychain). No Node.js or config file needed. Build it locally with `npm run bundle`.
+- Listed in the [MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.rbrtlol/canvas-readonly-mcp`, with both the npm package and the `.mcpb`. Releases publish there automatically.
 
 ### Changed
 

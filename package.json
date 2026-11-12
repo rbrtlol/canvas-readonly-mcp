@@ -12,6 +12,7 @@
     "lms",
     "education"
   ],
+  "mcpName": "io.github.rbrtlol/canvas-readonly-mcp",
   "license": "MIT",
   "author": "Robert Rosenquist",
   "homepage": "https://github.com/rbrtlol/canvas-readonly-mcp#readme",
