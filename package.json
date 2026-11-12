@@ -1,6 +1,6 @@
 {
   "name": "canvas-readonly-mcp",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Read-only Canvas LMS MCP server for students: what changed in your courses, full-text search over lecture slides and PDFs, deadlines and grades, for Claude and other MCP clients",
   "keywords": [
     "mcp",
