@@ -51,9 +51,20 @@ Works with any Canvas instance. Made for students; TAs and teachers can use it t
 
 ### 1. Get a Canvas access token
 
-In Canvas: **Account → Settings → + New access token**. Give it a purpose ("Claude") and preferably an expiry date. Some institutions disable personal tokens; if the button is missing, ask your Canvas admins.
+In Canvas: **Account → Settings → + New access token**. Give it a purpose ("Claude") and preferably an expiry date.
 
 You also need your Canvas address, e.g. `https://canvas.yourschool.edu` or `https://yourschool.instructure.com`.
+
+<details>
+<summary><b>No "New access token" button?</b> Your school may have turned personal tokens off.</summary>
+
+Some institutions disable personal access tokens for students, or only allow short-lived ones. This server needs one: it doesn't support Canvas OAuth, because that requires your school's admins to register each app.
+
+- **Button missing:** ask your school's Canvas or IT support whether personal access tokens can be enabled for you. Mention that it's for a tool that only reads (it never sends anything but `GET` requests). Some schools say yes, many say no.
+- **Token expires quickly:** tools start failing with "the Canvas API token is invalid or expired". Create a new token and update it: in Claude Desktop under **Settings → Extensions → Canvas LMS (read-only)**, or `CANVAS_TOKEN` in your config or `.env`.
+- **Check your school's rules** on connecting course data to AI tools before you start.
+
+</details>
 
 ### 2a. Claude Desktop: one-click extension (easiest)
 
@@ -165,6 +176,7 @@ All settings are environment variables (or a file passed with `--env-file`).
 - In HTTP mode the connector URL contains the secret: anyone with it can read your Canvas data (read-only). Wrong secrets get a plain 404. Rotate by changing `MCP_SECRET`.
 - Course content (pages, announcements, file text) is written by other people and goes to the model as tool output. See [SECURITY.md](SECURITY.md) about prompt injection.
 - Data stays on your machine/server: a SQLite database and an extracted-text cache. Delete `DATA_DIR` (or the Docker volumes) to remove it.
+- No telemetry and no hosted service: see [PRIVACY.md](PRIVACY.md) for what is read, stored and sent where.
 
 ## Development
 

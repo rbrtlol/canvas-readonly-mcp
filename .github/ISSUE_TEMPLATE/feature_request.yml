@@ -1,0 +1,25 @@
+name: Idea or feature request
+description: Something you'd like to ask Claude about your courses that doesn't work well yet
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This server is deliberately **read-only**: it will never submit, post, grade or message in Canvas, so requests for write features will be declined. Everything else is welcome.
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to ask or do?
+      description: The question you'd ask Claude, e.g. "Which lectures cover the topics on next week's exam?"
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today?
+      description: What Claude answers now, or which data it can't get to.
+  - type: input
+    id: role
+    attributes:
+      label: Your role
+      description: Student, TA or teacher.

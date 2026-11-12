@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- `PRIVACY.md`: what is read, stored and sent where (no telemetry, no hosted service), linked from the README and the Desktop extension.
+- README help for schools that turn personal access tokens off or make them expire quickly.
+
 ### Changed
 
 - Clearer tool descriptions, so clients pick the right tool: `canvas_changes_since` is the place to start for "what changed" and `canvas_whats_new` is Canvas's activity feed (for inbox messages); `canvas_list_linked_files` is the default way to find course material and `canvas_list_files` is the full Files area; `canvas_course_snapshot` is for overviews, the list/get tools for live data and full detail; `canvas_list_assignments` describes what it returns and when to use the planner or `canvas_get_assignment` instead.

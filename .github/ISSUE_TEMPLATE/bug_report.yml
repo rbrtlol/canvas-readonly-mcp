@@ -1,0 +1,44 @@
+name: Something doesn't work
+description: An error, wrong or missing data, or a problem with your school's Canvas
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste your access token, your connector URL (it contains your secret), or other people's names or grades.** Replace them with placeholders.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you asked or which tool ran, what you expected, and what you got instead. Include the exact error message.
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How do you run it?
+      options:
+        - Claude Desktop extension (.mcpb)
+        - npx / stdio (Claude Code, Claude Desktop config, other client)
+        - Docker / HTTP server (claude.ai custom connector)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release, e.g. 2.2.0. `canvas-readonly-mcp --version` prints it; the extension shows it in Claude Desktop under Settings → Extensions.
+    validations:
+      required: true
+  - type: input
+    id: canvas
+    attributes:
+      label: Canvas
+      description: Your Canvas host (e.g. canvas.yourschool.edu or yourschool.instructure.com) and your role in the course (student, TA, teacher). Leave the host out if you prefer.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or Canvas response (optional)
+      description: Server log lines, or the Canvas API response that confused the server (canvas_api_get can fetch it). Remove names, ids and anything personal first.
+      render: text

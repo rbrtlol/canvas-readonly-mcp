@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/rbrtlol/canvas-readonly-mcp/security/advisories/new
+    about: Please report security problems privately, not in a public issue.
+  - name: "No 'New access token' button in Canvas?"
+    url: https://github.com/rbrtlol/canvas-readonly-mcp#1-get-a-canvas-access-token
+    about: Your school has probably turned personal tokens off. See the README before opening an issue.

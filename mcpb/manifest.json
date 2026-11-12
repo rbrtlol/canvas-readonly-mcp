@@ -84,6 +84,7 @@
   "tools_generated": false,
   "keywords": ["canvas", "canvas-lms", "lms", "education", "student", "courses", "read-only"],
   "license": "MIT",
+  "privacy_policies": ["https://github.com/rbrtlol/canvas-readonly-mcp/blob/main/PRIVACY.md"],
   "compatibility": {
     "platforms": ["darwin", "win32", "linux"],
     "runtimes": {
