@@ -29,8 +29,9 @@ Works with any Canvas instance. Made for students; TAs and teachers can use it t
 | `canvas_course_snapshot` | Stored state of a course (optionally only some kinds, e.g. assignments). No Canvas calls. |
 | `canvas_snapshot_status` | Snapshot health: courses and your role, last run, counts, errors, next run. |
 | `canvas_run_snapshot` | Take a snapshot now and return what changed. |
+| `canvas_whoami` | The Canvas user the token belongs to; checks that the connection works. |
 | `canvas_list_courses` | Your courses, ids and your role in each. |
-| `canvas_whats_new` | Canvas activity stream since a time. |
+| `canvas_whats_new` | Canvas's own activity stream since a time, including inbox messages. Live, but doesn't see edits, removals or file changes like `canvas_changes_since` does. |
 | `canvas_list_planner_items` | Everything dated in a window, with submission status. |
 | `canvas_list_assignments` / `canvas_get_assignment` | Assignments, due dates, descriptions, rubrics; as a student also your submission, teacher comments and rubric scores. "Needs grading" counts for TAs/teachers. |
 | `canvas_list_quizzes` / `canvas_get_quiz` | Classic quizzes and New Quizzes: time limit, attempts, lock window, instructions, your latest attempt. |
@@ -40,7 +41,7 @@ Works with any Canvas instance. Made for students; TAs and teachers can use it t
 | `canvas_list_modules` | Module structure with items. |
 | `canvas_list_pages` / `canvas_get_page` | Course pages as text, with their file links. |
 | `canvas_list_linked_files` | Every file linked from the course (front page, pages, modules, assignments, announcements). Works even when the files tab is hidden. |
-| `canvas_list_files` | Course files; falls back to linked files when your role can't list them. |
+| `canvas_list_files` | The full Files area, including unlinked files (mostly for TAs/teachers); falls back to linked files when your role can't list it. |
 | `canvas_read_file` | Text of a PDF (per page), PPTX (per slide + notes), DOCX (per section), text/code file, or ZIP listing. Takes a file id or any Canvas file URL; supports page ranges. |
 | `canvas_list_calendar_events` | Calendar events. |
 | `canvas_get_grades` | Your own scores, grades and comments (as a student). |

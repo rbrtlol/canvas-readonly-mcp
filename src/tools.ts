@@ -190,7 +190,9 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
     {
       title: "What's new",
       description:
-        "Recent activity across all active courses (announcements, new/changed assignments, discussions, grades, messages) since a timestamp. Best tool for a daily check.",
+        "Canvas's own activity stream, live: announcements, assignment and discussion activity, grades and inbox messages across active courses since a timestamp. " +
+        "Prefer canvas_changes_since for what changed in courses (it also sees edits, removals and file changes); " +
+        "use this for inbox messages, or for courses the snapshots don't cover.",
       inputSchema: {
         since: z.string().optional().describe("ISO timestamp; default 26 hours ago"),
       },
@@ -251,7 +253,11 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
     "canvas_list_assignments",
     {
       title: "List assignments",
-      description: "Assignments in a course with due dates and your submission status.",
+      description:
+        "Live list of one course's assignments, ordered by due date: id, name, due/unlock/lock dates, points, submission types, " +
+        "and your submission status (submitted, grade, late, missing) as a student, or needs_grading counts as a TA/teacher. " +
+        "Use bucket to filter, e.g. \"upcoming\", \"overdue\" or \"unsubmitted\". " +
+        "For deadlines across all courses use canvas_list_planner_items; for one assignment's description, rubric and feedback use canvas_get_assignment.",
       inputSchema: {
         course_id: z.string(),
         bucket: z
@@ -556,8 +562,9 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
     {
       title: "List files",
       description:
-        "Files in a course, newest first. Uses the course files index when your role may see it; otherwise (common for students) " +
-        "falls back to the files linked from pages, modules, assignments and announcements, like canvas_list_linked_files.",
+        "The course's Files area, newest first, with optional name search: every uploaded file, including ones nothing links to. " +
+        "Usually only TAs/teachers may see it; for students it falls back to the files linked from the course. " +
+        "To find course material (slides, lab instructions) as a student, use canvas_list_linked_files instead, which also says where each file is linked from.",
       inputSchema: { course_id: z.string(), search: z.string().optional() },
       annotations: RO,
     },
@@ -590,7 +597,8 @@ export function registerTools(server: McpServer, canvas: CanvasClient, files: Fi
       title: "List linked files",
       description:
         "Find the course's files (slides, lab instructions, exercise sheets) by scanning the front page, pages reachable from it and from modules, " +
-        "the syllabus, assignment descriptions, announcements and module items. Works for students, unlike canvas_list_files. " +
+        "the syllabus, assignment descriptions, announcements and module items. Works even when the Files tab is hidden, so it's the " +
+        "default way to find course material; canvas_list_files is for the full Files area (mostly TAs/teachers). " +
         "Returns file_id, display_name, size, linked_from — pass file_id to canvas_read_file.",
       inputSchema: {
         course_id: z.string(),

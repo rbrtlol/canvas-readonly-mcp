@@ -62,7 +62,8 @@ export function registerSnapshotTools(server: McpServer, snaps: SnapshotService)
         "What changed in your courses since a time, from stored snapshots (taken daily, and refreshed in the background when stale): " +
         "added/changed/removed pages, assignments (due dates, grades), announcements, discussions, quizzes, events, files " +
         "(with which PDF pages changed), with old→new field values and short text diffs. Grouped by course, newest first. " +
-        `Times are ${DISPLAY_TZ}. Default since: 26 hours ago. The best first call for a daily check.`,
+        `Times are ${DISPLAY_TZ}. Default since: 26 hours ago. Start here for "what's new / what changed" questions. ` +
+        "Unlike canvas_whats_new (Canvas's own activity feed), it also catches edits, removals, moved deadlines and changed files.",
       inputSchema: {
         since: z.string().optional().describe("ISO timestamp; default 26h ago"),
         course_id: z.string().optional(),
@@ -151,8 +152,10 @@ export function registerSnapshotTools(server: McpServer, snaps: SnapshotService)
     {
       title: "Course snapshot",
       description:
-        "The stored state of a course from the latest snapshot (no Canvas calls), compact. " +
-        `Use kinds (${KINDS.join(", ")}) to keep it small, e.g. ["assignment"] for all deadlines and grades.`,
+        "Everything stored about one course in a single compact call, from the latest snapshot (no Canvas calls): " +
+        "for an overview or questions spanning many items, e.g. all deadlines and grades at once. " +
+        `Use kinds (${KINDS.join(", ")}) to keep it small, e.g. ["assignment"]. ` +
+        "For live data or full detail (rubrics, submission comments, whole page text) use the matching canvas_list_*/canvas_get_* tool.",
       inputSchema: {
         course_id: z.string(),
         kinds: kindsSchema,
